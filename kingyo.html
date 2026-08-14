@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8" />
+    <title>p5.jsと木枠の統合</title>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.11.8/lib/p5.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.11.8/lib/addons/p5.sound.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Yuji+Syuku&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="moyou.css">
+    <style>
+        /*
+         * =================================================================
+         * 基本設定と背景 (p5.js側から)
+         * =================================================================
+         */
+        :root {
+            --frame-color: #1b1b1b; /* 全ての線の色をここで一括管理します */
+            --thick-width: 13px; /* 太い線（外枠と中央線）の幅です */
+            --thin-width: 17px;  /* 細い線（それ以外の線）の幅です */
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* スクロールバーを非表示 */
+        }
+
+        body {
+            background-color: #080b29;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='40' height='46'%3e%3cpath d='M20 0 L40 11.5 L40 34.5 L20 46 L0 34.5 L0 11.5 Z M0 11.5 L20 23 L40 11.5 M20 23 L20 46' fill='none' stroke='rgba(141%2C141%2C141%2C0.4)' stroke-width='0.8'/%3e%3c/svg%3e");
+            background-size: 64px 80px;
+        }
+
+        /*
+         * =================================================================
+         * リロード通知アニメーション (p5.js側から)
+         * =================================================================
+         */
+        #refresh-notice {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.4);
+            justify-content: center;
+            align-items: center;
+            z-index: 9999; /* 最も手前に表示 */
+        }
+        .loader-wrapper {
+            position: relative;
+            width: 10em;
+            height: 10em;
+            display: flex;
+            justify-content: center;
+            transform: translate(12.5px, -100px);
+            font-size: 24px;
+        }
+        #loading3,
+        #loading3::before,
+        #loading3::after {
+            display: block;
+            content: '';
+            position: absolute;
+            bottom: 0;
+            background: #d45f5fe9;
+            transform-origin: 50% 50%;
+        }
+        #loading3::before {
+            top: -1em; left: -0.4em;
+            width: 1em; height: 2.5em;
+            transform: rotate(-45deg);
+            border-bottom-left-radius: 2em;
+            border-top-right-radius: 2em;
+            animation: loading3b 2s infinite;
+        }
+        #loading3::after {
+            top: -1em; left: -0.4em;
+            width: 1em; height: 2.5em;
+            transform: rotate(45deg);
+            border-bottom-left-radius: 2em;
+            border-top-right-radius: 2em;
+            animation: loading3a 2s infinite;
+        }
+        @keyframes loading3b {
+            0% { transform: rotate(-45deg); }
+            100% { transform: rotate(680deg); }
+        }
+        @keyframes loading3a {
+            0% { transform: rotate(45deg); }
+            100% { transform: rotate(765deg); }
+        }
+
+
+        /*
+         * =================================================================
+         * 木枠のスタイリング (ここから統合)
+         * =================================================================
+         */
+        .frame-container {
+            /*
+             * --- レイヤーと操作性の設定 ---
+             * position: absolute でp5.jsキャンバスの上に重ねます。
+             * z-index: 100 で描画順を手前に設定します。
+             * pointer-events: none で木枠がクリック等の邪魔をしないようにします。
+             */
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 100;
+            pointer-events: none;
+
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+            /*border: var(--thick-width) solid var(--frame-color);*/
+            border-style: solid;
+            border-color: var(--frame-color);
+            border-width: var(--thick-width) 0;
+        }
+
+        /* --- 各線のスタイリング (詳細は前回のコードと同様) --- */
+
+        /* 中央の太い縦線 */
+        #center-line {
+            position: absolute; background-color: var(--frame-color);
+            top: 0; left: 50.8%;
+            width: 20px; height: 100%;
+            transform: translateX(-50%);
+        }
+
+        /* 主要な横線 (上から20%) */
+        #h-line-top-20 {
+            position: absolute; background-color: var(--frame-color);
+            left: 0; top: 16%;
+            width: 100%; height: var(--thin-width);
+            transform: translateY(-50%);
+        }
+
+        /* 主要な横線 (上から80%) */
+        #h-line-top-80 {
+            position: absolute; background-color: var(--frame-color);
+            left: 0; top: 83.3%;
+            width: 100%; height: var(--thin-width);
+            transform: translateY(-50%);
+        }
+
+        /* 下部エリアの縦線 (80% ~ 100%) */
+        .v-line-bottom-section {
+            position: absolute; background-color: var(--frame-color);
+            top: 83%; height: 20%;
+            width: var(--thin-width);
+            transform: translateX(-50%);
+        }
+        #v-line-bottom-left-10 { left: 12.9%; } #v-line-bottom-left-20 { left: 22.24%; }
+        #v-line-bottom-left-30 { left: 31.55%; } #v-line-bottom-left-40 { left: 41.28%; }
+        #v-line-bottom-left-60 { left: 61.45%; } #v-line-bottom-left-70 { left: 70.5%; }
+        #v-line-bottom-left-80 { left: 79.4%; } #v-line-bottom-left-90 { left: 89%; }
+        
+        /* 中部エリアの縦線 (20% ~ 80%) */
+        .v-line-middle-section {
+            position: absolute; background-color: var(--frame-color);
+            top: 16%; height: 67%;
+            width: var(--thin-width);
+            transform: translateX(-50%);
+        }
+        #v-line-middle-left-15 { left: 14%; } #v-line-middle-left-35 { left: 38.39%; }
+        #v-line-middle-left-65 { left: 63.12%; } #v-line-middle-left-85 { left: 86.8%; }
+        #v-line-middle-left-5 { left: 2%; } #v-line-middle-left-95 { left: 98.25%; }
+        /* 中部エリアの短い横線 */
+        #h-line-segment-15-35 {
+            position: absolute; background-color: var(--frame-color);
+            top: 31.3%; left: 14%;
+            width: 24%; height: var(--thin-width);
+            transform: translateY(-50%);
+        }
+        #h-line-segment-65-85 {
+            position: absolute; background-color: var(--frame-color);
+            top: 30.7%; left: 63%;
+            width: 24%; height: var(--thin-width);
+            transform: translateY(-50%);
+        }
+
+        /* 上部エリアの縦線 (0% ~ 30%) */
+        .v-line-top-section {
+            position: absolute; background-color: var(--frame-color);
+            top: 0; height: 31%;
+            width: var(--thin-width);
+            transform: translateX(-50%);
+        }
+        #v-line-top-left-20 { left: 21.75%; }
+        #v-line-top-left-30 { left: 29.85%; }
+        #v-line-top-left-70 { left: 70.48%; }
+        #v-line-top-left-80 { left: 78.5%; }
+    </style>
+</head>
+<body>
+
+    <div class="frame-container">
+        <div id="center-line"></div>
+        <div id="h-line-top-20"></div>
+        <div id="h-line-top-80"></div>
+        <div id="v-line-bottom-left-10" class="v-line-bottom-section"></div>
+        <div id="v-line-bottom-left-20" class="v-line-bottom-section"></div>
+        <div id="v-line-bottom-left-30" class="v-line-bottom-section"></div>
+        <div id="v-line-bottom-left-40" class="v-line-bottom-section"></div>
+        <div id="v-line-bottom-left-60" class="v-line-bottom-section"></div>
+        <div id="v-line-bottom-left-70" class="v-line-bottom-section"></div>
+        <div id="v-line-bottom-left-80" class="v-line-bottom-section"></div>
+        <div id="v-line-bottom-left-90" class="v-line-bottom-section"></div>
+        <div id="v-line-middle-left-15" class="v-line-middle-section"></div>
+        <div id="v-line-middle-left-35" class="v-line-middle-section"></div>
+        <div id="v-line-middle-left-65" class="v-line-middle-section"></div>
+        <div id="v-line-middle-left-85" class="v-line-middle-section"></div>
+        <div id="v-line-middle-left-5" class="v-line-middle-section"></div>
+        <div id="v-line-middle-left-95" class="v-line-middle-section"></div>
+        <div id="h-line-segment-15-35"></div>
+        <div id="h-line-segment-65-85"></div>
+        <div id="v-line-top-left-20" class="v-line-top-section"></div>
+        <div id="v-line-top-left-30" class="v-line-top-section"></div>
+        <div id="v-line-top-left-70" class="v-line-top-section"></div>
+        <div id="v-line-top-left-80" class="v-line-top-section"></div>
+    </div>
+
+    <!-- p5.jsのスケッチがここに描画されます -->
+    <script src="sketch.js"></script>
+
+    <!-- リロード通知用の要素 -->
+    <div id="refresh-notice">
+        <div class="loader-wrapper">
+            <div id="loading3"></div>
+        </div>
+    </div>
+
+    <!-- ページリロード用のスクリプト -->
+    <script>
+        const RELOAD_INTERVAL = 40000; // 40秒ごとにリロード
+        const NOTICE_DURATION = 4000; // リロードの4秒前に通知を表示
+
+        const noticeElement = document.getElementById('refresh-notice');
+
+        // リロード前に通知を表示
+        setTimeout(() => {
+            noticeElement.style.display = 'flex';
+        }, RELOAD_INTERVAL - NOTICE_DURATION);
+
+        // 指定間隔でページを更新
+        setTimeout(() => {
+            location.reload();
+        }, RELOAD_INTERVAL);
+    </script>
+
+</body>
+</html>
